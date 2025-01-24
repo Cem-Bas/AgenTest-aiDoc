@@ -68,6 +68,10 @@
 </tr>
 </table>
 
+### 🤝 Interactive Login Feature
+- **Interactive Mode**: Launch a visible browser window for manual login
+- **Wait After Login**: Time to wait after login before starting analysis (default: 10)
+
 ## 🚀 Installation
 
 ### Quick Start
@@ -95,16 +99,16 @@ pip install -e .
 ### Basic Analysis
 ```bash
 # Simple URL analysis
-agentest-aidoc https://example.com
+aidoc https://example.com
 
 # With authentication
-agentest-aidoc https://example.com -u username -p password
+aidoc https://example.com -u username -p password
 ```
 
 ### Advanced Analysis
 ```bash
 # Comprehensive analysis with all features
-agentest-aidoc https://example.com \
+aidoc https://example.com \
     --screenshots \
     --memory \
     --security \
@@ -112,6 +116,40 @@ agentest-aidoc https://example.com \
     --accessibility \
     --export html
 ```
+
+### Analyzing Login-Required Sites
+
+> **🔒 Security Notice**
+> 
+> AgenTest aiDoc prioritizes your security:
+> - No authentication data is ever logged or stored
+> - Login is handled through a manual interactive browser session
+> - Credentials remain solely in your control
+> - No session data is persisted after analysis
+> - Reports and screenshots never contain sensitive authentication information
+
+For sites that require authentication, use interactive mode:
+```bash
+aidoc https://mail.google.com --interactive --screenshots --export html
+```
+
+Interactive mode options:
+- `--interactive`: Launch a visible browser window for manual login
+- `--wait-after-login <seconds>`: Time to wait after login before starting analysis (default: 10)
+
+Example with custom wait time:
+```bash
+aidoc https://mail.google.com --interactive --wait-after-login 15 --screenshots --export html
+```
+
+### Best Practices for Secure Analysis
+
+When analyzing login-protected sites:
+1. Always use interactive mode (`--interactive`)
+2. Log in manually through the browser window
+3. Never share exported reports containing sensitive data
+4. Close the browser window after analysis
+5. Use private/incognito mode if needed (coming soon)
 
 ### 🎛️ Available Options
 
@@ -123,6 +161,8 @@ agentest-aidoc https://example.com \
 | `--security` | Analyze security headers | False |
 | `--storage` | Inspect cookies & localStorage | False |
 | `--export` | Export format (html/json) | None |
+| `--interactive` | Launch a visible browser window for manual login | False |
+| `--wait-after-login` | Time to wait after login before starting analysis | 10 |
 
 ## 📁 Output Structure
 

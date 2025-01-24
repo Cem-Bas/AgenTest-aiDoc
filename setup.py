@@ -7,7 +7,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
 setup(
-    name="agentest-aidoc",
+    name="aidoc",
     version="1.0.0",
     author="AgenTest.ai",
     author_email="support@agentest.ai",
@@ -33,7 +33,7 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "agentest-aidoc=aidoc.AiDoc:main",
+            "aidoc=aidoc.AiDoc:main",
         ],
     },
 )

@@ -101,18 +101,16 @@ class ConsoleLogHandler:
         return '\n'.join(formatted) if formatted else f"{Colors.GREEN}No significant console logs found.{Colors.ENDC}"
 
 class AdvancedFeatures:
-    def __init__(self, driver, enable_screenshots=False, enable_memory=False, 
-                 enable_accessibility=False, enable_security=False, 
-                 enable_storage=False, export_format=None):
+    def __init__(self, driver, **kwargs):
         self.driver = driver
-        self.enable_screenshots = enable_screenshots
-        self.enable_memory = enable_memory
-        self.enable_accessibility = enable_accessibility
-        self.enable_security = enable_security
-        self.enable_storage = enable_storage
-        self.export_format = export_format
+        self.enable_screenshots = kwargs.get('enable_screenshots', False)
+        self.enable_memory = kwargs.get('enable_memory', False)
+        self.enable_accessibility = kwargs.get('enable_accessibility', False)
+        self.enable_security = kwargs.get('enable_security', False)
+        self.enable_storage = kwargs.get('enable_storage', False)
+        self.export_format = kwargs.get('export_format')
         self.results = {}
-        
+
     def capture_screenshot(self, error_count):
         """Capture screenshot when errors occur"""
         if not self.enable_screenshots:
@@ -216,6 +214,23 @@ class AdvancedFeatures:
         except Exception as e:
             print(f"{Colors.RED}Failed to inspect storage: {str(e)}{Colors.ENDC}")
             return None
+
+    def analyze(self, error_categories):
+        """Run all enabled analysis features"""
+        if self.enable_screenshots and error_categories:
+            self.results['screenshots'] = self.capture_screenshot(len(error_categories))
+            
+        if self.enable_memory:
+            self.results['memory'] = self.get_memory_usage()
+            
+        if self.enable_accessibility:
+            self.results['accessibility'] = self.check_accessibility()
+            
+        if self.enable_security:
+            self.results['security'] = self.analyze_security_headers()
+            
+        if self.enable_storage:
+            self.results['storage'] = self.inspect_storage()
 
     def export_results(self, console_logs, page_info):
         """Export results in specified format"""
@@ -336,6 +351,22 @@ def inject_error_listeners(driver):
         });
     """)
 
+def print_report(page_info, console_handler, total_time):
+    print(f"\n{Colors.CYAN}{'='*80}{Colors.ENDC}")
+    print(f"{Colors.BOLD}{Colors.CYAN}DETAILED ANALYSIS REPORT{Colors.ENDC}")
+    print(f"{Colors.CYAN}{'='*80}{Colors.ENDC}")
+    
+    print(f"\n{Colors.BOLD}1. Timing Information:{Colors.ENDC}")
+    print(f"{Colors.BOLD}Page Load Time:{Colors.ENDC} {page_info['load_time']:.2f}s")
+    print(f"{Colors.BOLD}Total Analysis Time:{Colors.ENDC} {total_time:.2f}s")
+    
+    print(f"\n{Colors.BOLD}2. Page Information:{Colors.ENDC}")
+    print(f"{Colors.BOLD}URL:{Colors.ENDC} {page_info['url']}")
+    print(f"{Colors.BOLD}Page Title:{Colors.ENDC} {page_info['title']}")
+    
+    print(f"\n{Colors.BOLD}3. Console Errors and Warnings:{Colors.ENDC}")
+    print(console_handler.get_formatted_logs())
+
 def main():
     parser = argparse.ArgumentParser(
         description='AgenTest aiDoc - Advanced Web Console Analysis Tool',
@@ -343,8 +374,8 @@ def main():
         epilog=AGENTEST_BANNER)
     
     parser.add_argument('url', help='URL to analyze')
-    parser.add_argument('-u', '--username', help='Username for authentication')
-    parser.add_argument('-p', '--password', help='Password for authentication')
+    parser.add_argument('--interactive', action='store_true', help='Launch browser in interactive mode for manual login')
+    parser.add_argument('--wait-after-login', type=int, default=10, help='Seconds to wait after login before analysis (default: 10)')
     parser.add_argument('--screenshots', action='store_true', help='Enable screenshot capture')
     parser.add_argument('--memory', action='store_true', help='Enable memory monitoring')
     parser.add_argument('--accessibility', action='store_true', help='Enable accessibility checks')
@@ -354,7 +385,9 @@ def main():
     
     args = parser.parse_args()
     
-    return main_impl(args.url, args.username, args.password,
+    return main_impl(args.url,
+                    interactive=args.interactive,
+                    wait_after_login=args.wait_after_login,
                     enable_screenshots=args.screenshots,
                     enable_memory=args.memory,
                     enable_accessibility=args.accessibility,
@@ -362,29 +395,30 @@ def main():
                     enable_storage=args.storage,
                     export_format=args.export)
 
-def main_impl(url, username=None, password=None, **kwargs):
+def main_impl(url, **kwargs):
     """Implementation of the main functionality"""
     start_time = time.time()
     print(AGENTEST_BANNER)
     
-    # Set up Chrome options for headless mode
+    # Initialize Chrome options
     chrome_options = Options()
-    chrome_options.add_argument('--headless=new')
-    chrome_options.add_argument('--disable-gpu')
+    if not kwargs.get('interactive', False):
+        chrome_options.add_argument('--headless')  # Run in headless mode only if not interactive
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--enable-logging')
-    chrome_options.add_argument('--v=1')
-    chrome_options.set_capability('goog:loggingPrefs', {
-        'browser': 'ALL',
-        'performance': 'ALL',
-        'network': 'ALL'
-    })
-
+    
+    # Create reports directory if it doesn't exist
+    os.makedirs('reports/screenshots', exist_ok=True)
+    os.makedirs('reports/html', exist_ok=True)
+    os.makedirs('reports/json', exist_ok=True)
+    
+    driver = None
     try:
-        # Initialize the Chrome driver
+        # Initialize WebDriver
         driver = webdriver.Chrome(options=chrome_options)
         wait = WebDriverWait(driver, 10)
+        
+        # Initialize console log handler
         console_handler = ConsoleLogHandler()
         
         # Initialize advanced features
@@ -399,132 +433,51 @@ def main_impl(url, username=None, password=None, **kwargs):
         )
         
         # Visit the URL
-        print(f"\n{Colors.CYAN}Visiting {url}...{Colors.ENDC}")
-        page_load_start = time.time()
+        print(f"\nVisiting {url}...")
+        load_start = time.time()
         driver.get(url)
-        page_load_time = time.time() - page_load_start
+        load_time = time.time() - load_start
         
-        # Handle login if credentials are provided
-        login_time = None
-        if username and password:
-            try:
-                print(f"\n{Colors.YELLOW}Attempting login...{Colors.ENDC}")
-                login_start = time.time()
-                
-                # Wait for username field and login form
-                username_field = wait.until(EC.presence_of_element_located((By.NAME, "username")))
-                password_field = driver.find_element(By.NAME, "password")
-                
-                # Fill in credentials
-                username_field.send_keys(username)
-                password_field.send_keys(password)
-                
-                # Submit the form
-                password_field.submit()
-                print(f"{Colors.GREEN}Login form submitted...{Colors.ENDC}")
-                
-                # Wait for page to load after login
-                try:
-                    wait.until(EC.staleness_of(username_field))
-                    login_time = time.time() - login_start
-                    print(f"{Colors.GREEN}Page reloaded after login... ({login_time:.2f}s){Colors.ENDC}")
-                except TimeoutException:
-                    print(f"{Colors.YELLOW}Warning: Page did not reload after login attempt{Colors.ENDC}")
-                
-            except Exception as e:
-                print(f"\n{Colors.RED}Login failed: {str(e)}{Colors.ENDC}")
-                print(f"{Colors.RED}Stack trace:\n{traceback.format_exc()}{Colors.ENDC}")
-
-        # Collect console logs and run advanced features
-        print(f"\n{Colors.BLUE}Running analysis...{Colors.ENDC}")
+        if kwargs.get('interactive', False):
+            print(f"\n{Colors.YELLOW}Interactive mode enabled. Please log in manually if needed.{Colors.ENDC}")
+            print(f"{Colors.YELLOW}Waiting {kwargs.get('wait_after_login', 10)} seconds after login...{Colors.ENDC}")
+            time.sleep(kwargs.get('wait_after_login', 10))
+            print(f"{Colors.GREEN}Proceeding with analysis...{Colors.ENDC}")
         
-        # Basic console logs
-        for log_entry in driver.get_log('browser'):
-            console_handler.add_log(log_entry)
+        print("\nRunning analysis...")
         
-        # Advanced features
-        if advanced.enable_screenshots and console_handler.logs:
-            advanced.results['screenshots'] = advanced.capture_screenshot(len(console_handler.logs))
-            
-        if advanced.enable_memory:
-            advanced.results['memory'] = advanced.get_memory_usage()
-            
-        if advanced.enable_accessibility:
-            advanced.results['accessibility'] = advanced.check_accessibility()
-            
-        if advanced.enable_security:
-            advanced.results['security'] = advanced.analyze_security_headers()
-            
-        if advanced.enable_storage:
-            advanced.results['storage'] = advanced.inspect_storage()
+        # Inject error listeners
+        inject_error_listeners(driver)
         
-        # Capture final state
-        final_state = capture_page_state(driver, url)
+        # Capture the current state of the page
+        page_info = capture_page_state(driver, url)
+        page_info['load_time'] = load_time
+        
+        # Get console logs
+        logs = driver.get_log('browser')
+        for log in logs:
+            console_handler.add_log(log)
+        
+        # Run advanced analysis
+        advanced.analyze(console_handler.error_categories)
+        
+        # Generate report
         total_time = time.time() - start_time
-        
-        # Prepare report data
-        page_info = {
-            'url': url,
-            'title': final_state['title'],
-            'timing': {
-                'page_load': page_load_time,
-                'login': login_time,
-                'total': total_time
-            }
-        }
+        print_report(page_info, console_handler, total_time)
         
         # Export results if requested
-        if advanced.export_format:
-            advanced.export_results(console_handler.logs, page_info)
+        if kwargs.get('export_format'):
+            advanced.export_results(console_handler.get_formatted_logs(), page_info)
         
-        # Print detailed report
-        print(f"\n{Colors.CYAN}{'='*80}{Colors.ENDC}")
-        print(f"{Colors.BOLD}{Colors.CYAN}DETAILED ANALYSIS REPORT{Colors.ENDC}")
-        print(f"{Colors.CYAN}{'='*80}{Colors.ENDC}")
-        
-        print(f"\n{Colors.BOLD}1. Timing Information:{Colors.ENDC}")
-        print(f"{Colors.BOLD}Initial Page Load:{Colors.ENDC} {page_load_time:.2f}s")
-        if login_time:
-            print(f"{Colors.BOLD}Login Process:{Colors.ENDC} {login_time:.2f}s")
-        print(f"{Colors.BOLD}Total Analysis Time:{Colors.ENDC} {total_time:.2f}s")
-        
-        print(f"\n{Colors.BOLD}2. Page Information:{Colors.ENDC}")
-        print(f"{Colors.BOLD}Initial URL:{Colors.ENDC} {url}")
-        print(f"{Colors.BOLD}Final URL:{Colors.ENDC} {final_state['url']}")
-        print(f"{Colors.BOLD}Page Title:{Colors.ENDC} {final_state['title']}")
-        
-        print(f"\n{Colors.BOLD}3. Console Errors and Warnings:{Colors.ENDC}")
-        print(console_handler.get_formatted_logs())
-        
-        if advanced.results:
-            print(f"\n{Colors.BOLD}4. Advanced Analysis Results:{Colors.ENDC}")
-            
-            if 'memory' in advanced.results:
-                memory = advanced.results['memory']
-                print(f"\n{Colors.BOLD}Memory Usage:{Colors.ENDC}")
-                print(f"RSS: {memory['rss']:.2f} MB")
-                print(f"VMS: {memory['vms']:.2f} MB")
-                print(f"Percent: {memory['percent']:.1f}%")
-            
-            if 'security' in advanced.results:
-                headers = advanced.results['security']
-                print(f"\n{Colors.BOLD}Security Headers:{Colors.ENDC}")
-                for header, value in headers.items():
-                    status = "✓" if value != "Not Set" else "✗"
-                    color = Colors.GREEN if value != "Not Set" else Colors.RED
-                    print(f"{color}{status} {header}: {value}{Colors.ENDC}")
-            
-            if 'storage' in advanced.results:
-                storage = advanced.results['storage']
-                print(f"\n{Colors.BOLD}Storage Information:{Colors.ENDC}")
-                print(f"Cookies: {len(storage['cookies'])} found")
-                print(f"LocalStorage Items: {len(storage['localStorage'])} found")
+        return 0
         
     except Exception as e:
-        print(f"\n{Colors.RED}An error occurred: {str(e)}{Colors.ENDC}")
-        print(f"{Colors.RED}Stack trace:\n{traceback.format_exc()}{Colors.ENDC}")
+        print(f"\n{Colors.RED}Error: {str(e)}{Colors.ENDC}")
+        traceback.print_exc()
+        return 1
+        
     finally:
-        if 'driver' in locals():
+        if driver and not kwargs.get('interactive', False):
             driver.quit()
 
 if __name__ == '__main__':
