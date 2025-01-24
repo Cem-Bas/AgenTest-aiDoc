@@ -100,9 +100,6 @@ pip install -e .
 ```bash
 # Simple URL analysis
 aidoc https://example.com
-
-# With authentication
-aidoc https://example.com -u username -p password
 ```
 
 ### Advanced Analysis
@@ -132,6 +129,36 @@ For sites that require authentication, use interactive mode:
 ```bash
 aidoc https://mail.google.com --interactive --screenshots --export html
 ```
+
+#### Example: Gmail Analysis with Interactive Login
+
+Here's a step-by-step guide for analyzing Gmail:
+
+1. Start the analysis:
+```bash
+aidoc https://mail.google.com --interactive --wait-after-login 20 --screenshots --export html
+```
+
+2. When the browser window opens:
+   - You'll see the standard Google login page
+   - Enter your email and click "Next"
+   - Enter your password
+   - Complete 2FA if enabled on your account
+   - Wait for Gmail to fully load your inbox
+
+3. After successful login:
+   - The tool will wait 20 seconds (as specified by --wait-after-login)
+   - This ensures Gmail is fully loaded with all dynamic content
+   - Analysis will then begin automatically
+   - The browser will navigate through your inbox to analyze console output
+
+4. Analysis Results:
+   - Screenshots will be captured for any errors
+   - Console logs will be analyzed
+   - Security headers will be checked
+   - A full HTML report will be generated
+
+> **💡 Tip**: For Gmail, we recommend using `--wait-after-login 20` because Gmail's interface takes time to fully load all components.
 
 Interactive mode options:
 - `--interactive`: Launch a visible browser window for manual login
