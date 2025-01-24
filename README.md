@@ -320,9 +320,4 @@ Report on <a href="https://github.com/agentest/aidoc/issues">GitHub</a>
 
 <div align="center">
   <p>Made with <a href="https://codeium.com/windsurf">Windsurf</a> by <a href="https://agentest.ai">AgenTest.ai</a></p>
-  <p>
-    <a href="https://codeium.com/windsurf">
-      <img src="https://codeium.com/images/windsurf-logo.png" alt="Windsurf Logo" width="200">
-    </a>
-  </p>
 </div>
